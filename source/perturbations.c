@@ -228,6 +228,7 @@ int perturb_output_data(
           class_store_double(dataptr,tk[ppt->index_tp_delta_b],ppt->has_source_delta_b,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_delta_cdm],ppt->has_source_delta_cdm,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_delta_idm_dr],ppt->has_source_delta_idm_dr,storeidx);
+          class_store_double(dataptr,tk[ppt->index_tp_delta_dmb],ppt->has_source_delta_dmb,storeidx)
           class_store_double(dataptr,tk[ppt->index_tp_delta_fld],ppt->has_source_delta_fld,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_delta_ur],ppt->has_source_delta_ur,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_delta_idr],ppt->has_source_delta_idr,storeidx);
@@ -256,6 +257,7 @@ int perturb_output_data(
           class_store_double(dataptr,tk[ppt->index_tp_theta_b],ppt->has_source_theta_b,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_theta_cdm],ppt->has_source_theta_cdm,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_theta_idm_dr],ppt->has_source_theta_idm_dr,storeidx);
+	  class_store_double(dataptr,tk[ppt->index_tp_theta_dmb],ppt->has_source_theta_dmb,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_theta_fld],ppt->has_source_theta_fld,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_theta_ur],ppt->has_source_theta_ur,storeidx);
           class_store_double(dataptr,tk[ppt->index_tp_theta_idr],ppt->has_source_theta_idr,storeidx);
@@ -277,6 +279,7 @@ int perturb_output_data(
         /* rescale and reorder the matter transfer functions following the CMBFAST/CAMB convention */
         class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_cdm]/k2,ppt->has_source_delta_cdm,storeidx,0.0);
         class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_idm_dr]/k2,ppt->has_source_delta_idm_dr,storeidx,0.0);
+	class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_dmb]/k2,ppt->has_source_delta_dmb,storeidx,0.0);
         class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_b]/k2,ppt->has_source_delta_b,storeidx,0.0);
         class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_g]/k2,ppt->has_source_delta_g,storeidx,0.0);
         class_store_double_or_default(dataptr,-tk[ppt->index_tp_delta_ur]/k2,ppt->has_source_delta_ur,storeidx,0.0);
@@ -321,6 +324,7 @@ int perturb_output_titles(
       class_store_columntitle(titles,"d_b",_TRUE_);
       class_store_columntitle(titles,"d_cdm",pba->has_cdm);
       class_store_columntitle(titles,"d_idm_dr",pba->has_idm_dr);
+      class_store_columntitle(titles,"d_dmb",pba->has_dmb);
       class_store_columntitle(titles,"d_fld",pba->has_fld);
       class_store_columntitle(titles,"d_ur",pba->has_ur);
       class_store_columntitle(titles,"d_idr",pba->has_idr);
@@ -349,6 +353,7 @@ int perturb_output_titles(
       class_store_columntitle(titles,"t_b",_TRUE_);
       class_store_columntitle(titles,"t_cdm",((pba->has_cdm == _TRUE_) && (ppt->gauge != synchronous)));
       class_store_columntitle(titles,"t_idm_dr",pba->has_idm_dr);
+      class_store_columntitle(titles,"t_dmb",pba->has_dmb);
       class_store_columntitle(titles,"t_fld",pba->has_fld);
       class_store_columntitle(titles,"t_ur",pba->has_ur);
       class_store_columntitle(titles,"t_idr",pba->has_idr);
@@ -370,6 +375,7 @@ int perturb_output_titles(
     class_store_columntitle(titles,"k (h/Mpc)",_TRUE_);
     class_store_columntitle(titles,"-T_cdm/k2",_TRUE_);
     class_store_columntitle(titles,"-T_idm_dr/k2",_TRUE_);
+    class_store_columntitle(titles,"-T_dmb/k2",_TRUE_);
     class_store_columntitle(titles,"-T_b/k2",_TRUE_);
     class_store_columntitle(titles,"-T_g/k2",_TRUE_);
     class_store_columntitle(titles,"-T_ur/k2",_TRUE_);
@@ -578,6 +584,14 @@ int perturb_init(
 
   }
 
+  if (pba->has_dmb == _TRUE_) {
+
+    class_test((ppt->has_cdi == _TRUE_) || (ppt->has_bi == _TRUE_) || (ppt->has_nid == _TRUE_) || (ppt->has_niv == _TRUE_),
+               ppt->error_message,
+               "Non-adiabatic initial conditions not coded in presence of dark matter-baryon scattering");
+
+  }
+  
   if (pba->has_dcdm == _TRUE_) {
 
     class_test((ppt->has_cdi == _TRUE_) || (ppt->has_bi == _TRUE_) || (ppt->has_nid == _TRUE_) || (ppt->has_niv == _TRUE_),
@@ -1049,6 +1063,7 @@ int perturb_indices(
   ppt->has_source_delta_ur = _FALSE_;
   ppt->has_source_delta_idr = _FALSE_;
   ppt->has_source_delta_idm_dr = _FALSE_;
+  ppt->has_source_delta_dmb = _FALSE_;
   ppt->has_source_delta_ncdm = _FALSE_;
   ppt->has_source_theta_m = _FALSE_;
   ppt->has_source_theta_cb = _FALSE_;
@@ -1063,6 +1078,7 @@ int perturb_indices(
   ppt->has_source_theta_ur = _FALSE_;
   ppt->has_source_theta_idr = _FALSE_;
   ppt->has_source_theta_idm_dr = _FALSE_;
+  ppt->has_source_theta_dmb = _FALSE_;
   ppt->has_source_theta_ncdm = _FALSE_;
   ppt->has_source_phi = _FALSE_;
   ppt->has_source_phi_prime = _FALSE_;
@@ -1156,6 +1172,8 @@ int perturb_indices(
           ppt->has_source_delta_idr = _TRUE_;
         if (pba->has_idm_dr == _TRUE_)
           ppt->has_source_delta_idm_dr = _TRUE_;
+	if (pba->has_dmb == _TRUE_)
+          ppt->has_source_delta_dmb = _TRUE_;
         if (pba->has_dr == _TRUE_)
           ppt->has_source_delta_dr = _TRUE_;
         if (pba->has_ncdm == _TRUE_)
@@ -1187,6 +1205,8 @@ int perturb_indices(
           ppt->has_source_theta_idr = _TRUE_;
         if (pba->has_idm_dr == _TRUE_)
           ppt->has_source_theta_idm_dr = _TRUE_;
+	if (pba->has_dmb == _TRUE_)
+          ppt->has_source_theta_dmb = _TRUE_;
         if (pba->has_dr == _TRUE_)
           ppt->has_source_theta_dr = _TRUE_;
         if (pba->has_ncdm == _TRUE_)
@@ -1260,6 +1280,7 @@ int perturb_indices(
       class_define_index(ppt->index_tp_delta_ur,   ppt->has_source_delta_ur,  index_type,1);
       class_define_index(ppt->index_tp_delta_idr,  ppt->has_source_delta_idr, index_type,1);
       class_define_index(ppt->index_tp_delta_idm_dr,  ppt->has_source_delta_idm_dr, index_type,1);
+      class_define_index(ppt->index_tp_delta_dmb,  ppt->has_source_delta_dmb, index_type,1);
       class_define_index(ppt->index_tp_delta_ncdm1,ppt->has_source_delta_ncdm,index_type,pba->N_ncdm);
       class_define_index(ppt->index_tp_theta_m,    ppt->has_source_theta_m,   index_type,1);
       class_define_index(ppt->index_tp_theta_cb,   ppt->has_source_theta_cb,  index_type,1);
@@ -1274,6 +1295,7 @@ int perturb_indices(
       class_define_index(ppt->index_tp_theta_ur,   ppt->has_source_theta_ur,  index_type,1);
       class_define_index(ppt->index_tp_theta_idr,  ppt->has_source_theta_idr, index_type,1);
       class_define_index(ppt->index_tp_theta_idm_dr,  ppt->has_source_theta_idm_dr, index_type,1);
+      class_define_index(ppt->index_tp_theta_dmb,  ppt->has_source_theta_dmb, index_type,1);
       class_define_index(ppt->index_tp_theta_ncdm1,ppt->has_source_theta_ncdm,index_type,pba->N_ncdm);
       class_define_index(ppt->index_tp_phi,        ppt->has_source_phi,       index_type,1);
       class_define_index(ppt->index_tp_phi_prime,  ppt->has_source_phi_prime, index_type,1);
@@ -3725,6 +3747,10 @@ int perturb_vector_init(
     class_define_index(ppv->index_pt_delta_idm_dr,pba->has_idm_dr,index_pt,1); /* idm_dr density */
     class_define_index(ppv->index_pt_theta_idm_dr,pba->has_idm_dr,index_pt,1); /* idm_dr velocity */
 
+    /* dmb */
+    class_define_index(ppv->index_pt_delta_dmb,pba->has_dmb,index_pt,1); /* dmb density */
+    class_define_index(ppv->index_pt_theta_dmb,pba->has_dmb,index_pt,1); /* dmb velocity */
+
     /* dcdm */
 
     class_define_index(ppv->index_pt_delta_dcdm,pba->has_dcdm,index_pt,1); /* dcdm density */
@@ -4174,6 +4200,15 @@ int perturb_vector_init(
           ppv->y[ppv->index_pt_theta_cdm] =
             ppw->pv->y[ppw->pv->index_pt_theta_cdm];
         }
+      }
+
+      if (pba->has_dmb == _TRUE_) {
+
+        ppv->y[ppv->index_pt_delta_dmb] =
+          ppw->pv->y[ppw->pv->index_pt_delta_dmb];
+
+        ppv->y[ppv->index_pt_theta_dmb] =
+          ppw->pv->y[ppw->pv->index_pt_theta_dmb];
       }
 
       if (pba->has_idm_dr == _TRUE_) {
@@ -5081,12 +5116,12 @@ int perturb_initial_conditions(struct precision * ppr,
 
   double a,a_prime_over_a;
   double w_fld,dw_over_da_fld,integral_fld;
-  double delta_ur=0.,theta_ur=0.,shear_ur=0.,l3_ur=0.,eta=0.,delta_cdm=0.,alpha, alpha_prime;
+  double delta_ur=0.,theta_ur=0.,shear_ur=0.,l3_ur=0.,eta=0.,delta_cdm=0.,delta_dmb=0.,theta_dmb=0.,alpha, alpha_prime;
   double delta_dr=0;
   double q,epsilon,k2;
   int index_q,n_ncdm,idx;
   double rho_r,rho_m,rho_nu,rho_m_over_rho_r;
-  double fracnu,fracg,fracb,fraccdm,om;
+  double fracnu,fracg,fracb,fraccdm,fracdmb,om;
   double ktau_two,ktau_three;
   double f_dr;
 
@@ -5126,6 +5161,10 @@ int perturb_initial_conditions(struct precision * ppr,
 
     if (pba->has_cdm == _TRUE_) {
       rho_m += ppw->pvecback[pba->index_bg_rho_cdm];
+    }
+
+    if (pba->has_dmb == _TRUE_) {
+      rho_m += ppw->pvecback[pba->index_bg_rho_dmb];
     }
 
     if (pba->has_idm_dr == _TRUE_) {
@@ -5173,6 +5212,13 @@ int perturb_initial_conditions(struct precision * ppr,
 
     /* f_cdm = Omega_cdm(t_i) / Omega_m(t_i) */
     fraccdm = 1.-fracb;
+
+    /* f_dmb = Omega_dmb(t_i) / Omega_m(t_i) */
+    if (pba->has_dmb == _TRUE_){
+      fracdmb = ppw->pvecback[pba->index_bg_rho_dmb]/rho_m;
+    } else {
+      fracdmb = 0.;
+    }
 
     /* Omega_m(t_i) / Omega_r(t_i) */
     rho_m_over_rho_r = rho_m/rho_r;
@@ -5234,6 +5280,13 @@ int perturb_initial_conditions(struct precision * ppr,
       if (pba->has_cdm == _TRUE_) {
         ppw->pv->y[ppw->pv->index_pt_delta_cdm] = 3./4.*ppw->pv->y[ppw->pv->index_pt_delta_g]; /* cdm density */
         /* cdm velocity vanishes in the synchronous gauge */
+      }
+
+      /* dmb */
+      if (pba->has_dmb == _TRUE_) {
+        ppw->pv->y[ppw->pv->index_pt_delta_dmb] = 3./4.*ppw->pv->y[ppw->pv->index_pt_delta_g]; /* dmb density */
+        ppw->pv->y[ppw->pv->index_pt_theta_dmb] = ppw->pv->y[ppw->pv->index_pt_theta_g]; /* dmb velocity */
+        /* assume dmb velocity is tightly coupled to baryons */
       }
 
       /* interacting dark matter */
@@ -5479,13 +5532,18 @@ int perturb_initial_conditions(struct precision * ppr,
       else if (pba->has_idm_dr == _TRUE_)
         delta_cdm = ppw->pv->y[ppw->pv->index_pt_delta_idm_dr];
       else
-        delta_cdm=0.;
+        delta_cdm=0.;//VG: should dmb be added here?
+
+      if (pba->has_dmb == _TRUE_){
+        delta_dmb = ppw->pv->y[ppw->pv->index_pt_delta_dmb];
+        theta_dmb = ppw->pv->y[ppw->pv->index_pt_theta_dmb];
+      }
 
       // note: if there are no neutrinos, fracnu, delta_ur and theta_ur below will consistently be zero.
 
-      delta_tot = (fracg*ppw->pv->y[ppw->pv->index_pt_delta_g]+fracnu*delta_ur+rho_m_over_rho_r*(fracb*ppw->pv->y[ppw->pv->index_pt_delta_b]+fraccdm*delta_cdm))/(1.+rho_m_over_rho_r);
+      delta_tot = (fracg*ppw->pv->y[ppw->pv->index_pt_delta_g]+fracnu*delta_ur+rho_m_over_rho_r*(fracb*ppw->pv->y[ppw->pv->index_pt_delta_b]+fraccdm*delta_cdm+fracdmb*delta_dmb))/(1.+rho_m_over_rho_r);
 
-      velocity_tot = ((4./3.)*(fracg*ppw->pv->y[ppw->pv->index_pt_theta_g]+fracnu*theta_ur) + rho_m_over_rho_r*fracb*ppw->pv->y[ppw->pv->index_pt_theta_b])/(1.+rho_m_over_rho_r);
+      velocity_tot = ((4./3.)*(fracg*ppw->pv->y[ppw->pv->index_pt_theta_g]+fracnu*theta_ur) + rho_m_over_rho_r*fracb*ppw->pv->y[ppw->pv->index_pt_theta_b]+fracdmb*theta_dmb)/(1.+rho_m_over_rho_r);
 
       alpha = (eta + 3./2.*a_prime_over_a*a_prime_over_a/k/k/s2_squared*(delta_tot + 3.*a_prime_over_a/k/k*velocity_tot))/a_prime_over_a;
 
@@ -5500,6 +5558,11 @@ int perturb_initial_conditions(struct precision * ppr,
       if (pba->has_cdm == _TRUE_) {
         ppw->pv->y[ppw->pv->index_pt_delta_cdm] -= 3.*a_prime_over_a*alpha;
         ppw->pv->y[ppw->pv->index_pt_theta_cdm] = k*k*alpha;
+      }
+
+      if (pba->has_dmb == _TRUE_) {
+        ppw->pv->y[ppw->pv->index_pt_delta_dmb] -= 3.*a_prime_over_a*alpha;
+        ppw->pv->y[ppw->pv->index_pt_theta_dmb] += k*k*alpha;
       }
 
       if (pba->has_idm_dr == _TRUE_){
@@ -6651,6 +6714,22 @@ int perturb_total_stress_energy(
       ppw->rho_plus_p_tot += ppw->pvecback[pba->index_bg_rho_idm_dr];
     }
 
+    /* dmb contribution */
+    if (pba->has_dmb == _TRUE_) {
+      ppw->delta_rho += ppw->pvecback[pba->index_bg_rho_dmb]*y[ppw->pv->index_pt_delta_dmb];
+      ppw->rho_plus_p_theta += ppw->pvecback[pba->index_bg_rho_dmb]*y[ppw->pv->index_pt_theta_dmb];
+      ppw->rho_plus_p_tot += ppw->pvecback[pba->index_bg_rho_dmb];
+      
+      if (ppt->has_source_delta_m == _TRUE_) {
+        delta_rho_m += ppw->pvecback[pba->index_bg_rho_dmb]*y[ppw->pv->index_pt_delta_dmb]; // contribution to delta rho_matter
+        rho_m += ppw->pvecback[pba->index_bg_rho_dmb];
+      }
+      if ((ppt->has_source_delta_m == _TRUE_) || (ppt->has_source_theta_m == _TRUE_)) {
+        rho_plus_p_theta_m += ppw->pvecback[pba->index_bg_rho_dmb]*y[ppw->pv->index_pt_theta_dmb]; // contribution to [(rho+p)theta]_matter
+        rho_plus_p_m += ppw->pvecback[pba->index_bg_rho_dmb];
+      }
+    }
+
     /* dcdm contribution */
     if (pba->has_dcdm == _TRUE_) {
       ppw->delta_rho += ppw->pvecback[pba->index_bg_rho_dcdm]*y[ppw->pv->index_pt_delta_dcdm];
@@ -7511,6 +7590,13 @@ int perturb_sources(
         + 3.*a_prime_over_a*theta_over_k2; // N-body gauge correction
     }
 
+     /* delta_dmb */
+    if (ppt->has_source_delta_dmb == _TRUE_) {
+      _set_source_(ppt->index_tp_delta_dmb) = y[ppw->pv->index_pt_delta_dmb]
+	+ 3.*a_prime_over_a*theta_over_k2; // N-body gauge correction;//VG: is this particular line even needed??
+    }
+
+
     /* delta_ncdm1 */
     if (ppt->has_source_delta_ncdm == _TRUE_) {
       for (index_tp = ppt->index_tp_delta_ncdm1; index_tp < ppt->index_tp_delta_ncdm1+pba->N_ncdm; index_tp++) {
@@ -7563,6 +7649,12 @@ int perturb_sources(
       _set_source_(ppt->index_tp_theta_cdm) = y[ppw->pv->index_pt_theta_cdm]
         + theta_shift; // N-body gauge correction
     }
+
+    /* theta_dmb */
+    if (ppt->has_source_theta_dmb == _TRUE_) {
+      _set_source_(ppt->index_tp_theta_dmb) = y[ppw->pv->index_pt_theta_dmb]
+        + theta_shift; // N-body gauge correction //VG: is this particular line needed??
+    }    
 
     /* theta_idm_dr */
     if (ppt->has_source_theta_idm_dr == _TRUE_) {
@@ -7723,6 +7815,7 @@ int perturb_print_variables(double tau,
   double delta_g,theta_g,shear_g,l4_g,pol0_g,pol1_g,pol2_g,pol4_g;
   double delta_b,theta_b;
   double delta_cdm=0.,theta_cdm=0.;
+  double delta_dmb=0.,theta_dmb=0.;
   double delta_idm_dr=0.,theta_idm_dr=0.;
   double delta_dcdm=0.,theta_dcdm=0.;
   double delta_dr=0.,theta_dr=0.,shear_dr=0., f_dr=1.0;
@@ -7899,6 +7992,13 @@ int perturb_print_variables(double tau,
       theta_idm_dr = y[ppw->pv->index_pt_theta_idm_dr];
     }
 
+    /* matter-baryon scattering, dmb */
+    if (pba->has_dmb == _TRUE_) {
+      delta_dmb = y[ppw->pv->index_pt_delta_dmb];
+      theta_dmb = y[ppw->pv->index_pt_theta_dmb];
+
+    }
+
     if (pba->has_cdm == _TRUE_) {
 
       delta_cdm = y[ppw->pv->index_pt_delta_cdm];
@@ -8054,6 +8154,11 @@ int perturb_print_variables(double tau,
         theta_cdm += k*k*alpha;
       }
 
+      if (pba->has_dmb == _TRUE_) {
+        delta_dmb -= 3. * pvecback[pba->index_bg_H]*pvecback[pba->index_bg_a]*alpha;
+        theta_dmb += k*k*alpha;
+      }
+
       if (pba->has_idm_dr == _TRUE_) {
         delta_idm_dr -= 3. * pvecback[pba->index_bg_H]*pvecback[pba->index_bg_a]*alpha;
         theta_idm_dr += k*k*alpha;
@@ -8122,6 +8227,9 @@ int perturb_print_variables(double tau,
     /* Interacting dark matter */
     class_store_double(dataptr, delta_idm_dr, pba->has_idm_dr, storeidx);
     class_store_double(dataptr, theta_idm_dr, pba->has_idm_dr, storeidx);
+    /* Dark matter-baryon scattering, dmb */
+    class_store_double(dataptr, delta_dmb, pba->has_dmb, storeidx);
+    class_store_double(dataptr, theta_dmb, pba->has_dmb, storeidx);
     /* Cold dark matter */
     class_store_double(dataptr, delta_cdm, pba->has_cdm, storeidx);
     class_store_double(dataptr, theta_cdm, pba->has_cdm, storeidx);
@@ -8369,6 +8477,11 @@ int perturb_derivs(double tau,
   /* for use with dcdm and dr */
   double f_dr, fprime_dr;
 
+  /* for use with dmb */
+  double rate_dmb;
+  double R_dmb, beta_dmb=0., theta_dmb;
+  double tau_dmb, dtau_dmb;
+
   double Sinv=0., dmu_idm_dr=0., dmu_idr=0., tca_slip_idm_dr=0.;
 
   /** - rename the fields of the input structure (just to avoid heavy notations) */
@@ -8431,6 +8544,9 @@ int perturb_derivs(double tau,
   a_prime_over_a = pvecback[pba->index_bg_H] * a;
   R = 4./3. * pvecback[pba->index_bg_rho_g]/pvecback[pba->index_bg_rho_b];
 
+  if (pba->has_dmb == _TRUE_)
+    R_dmb = pvecback[pba->index_bg_rho_dmb]/pvecback[pba->index_bg_rho_b];
+  
   if((pba->has_idm_dr==_TRUE_)){
     Sinv = 4./3. * pvecback[pba->index_bg_rho_idr]/ pvecback[pba->index_bg_rho_idm_dr];
     dmu_idm_dr = pvecthermo[pth->index_th_dmu_idm_dr];
@@ -8472,6 +8588,9 @@ int perturb_derivs(double tau,
     theta_b = y[pv->index_pt_theta_b];
     cb2 = pvecthermo[pth->index_th_cb2];
     delta_p_b_over_rho_b = cb2*delta_b; /* for baryons, (delta p)/rho with Ma & Bertschinger approximation: sound speed = adiabatic sound speed */
+
+    if(pba->has_dmb == _TRUE_)
+      theta_dmb = y[pv->index_pt_theta_dmb];
 
     /** - --> (b) perturbed recombination **/
 
@@ -8562,6 +8681,27 @@ int perturb_derivs(double tau,
 
     /** - --> (e) BEGINNING OF ACTUAL SYSTEM OF EQUATIONS OF EVOLUTION */
 
+    /** -> dmb */
+
+    if (pba->has_dmb == _TRUE_) {
+
+      /** ---> dmb density and velocity */
+      /* Be sure to use dmb speed of sound, temperature, or rates from thermo and not background */
+
+      dy[pv->index_pt_delta_dmb] = -(theta_dmb+metric_continuity); /* dmb density */
+
+      rate_dmb = pvecthermo[pth->index_th_dkappa_dmb];
+
+      dy[pv->index_pt_theta_dmb] =
+        - a_prime_over_a*theta_dmb + metric_euler
+        + k2*pvecthermo[pth->index_th_cdmb2]*y[pv->index_pt_delta_dmb]
+        + rate_dmb*(theta_b - theta_dmb);
+
+      beta_dmb = ( rate_dmb/pvecthermo[pth->index_th_dkappa] ) * R_dmb / (1. + R);
+
+    }
+
+
     /** - ---> photon temperature density */
 
     if (ppw->approx[ppw->index_ap_rsa] == (int)rsa_off) {
@@ -8587,6 +8727,11 @@ int perturb_derivs(double tau,
         + k2*delta_p_b_over_rho_b
         + R*pvecthermo[pth->index_th_dkappa]*(theta_g-theta_b);
 
+      /** contributions from dark matter-baryon scattering (dmb) **/
+      if (pba->has_dmb == _TRUE_){
+        dy[pv->index_pt_theta_b] += R_dmb * rate_dmb * (theta_dmb-theta_b);
+      }
+
     }
 
     else {
@@ -8600,8 +8745,18 @@ int perturb_derivs(double tau,
       dy[pv->index_pt_theta_b] =
         (-a_prime_over_a*theta_b
          +k2*(delta_p_b_over_rho_b+R*(delta_g/4.-s2_squared*ppw->tca_shear_g))
-         +R*ppw->tca_slip)/(1.+R)
+         +R*ppw->tca_slip)/(1.+R+beta_dmb*R)
         +metric_euler;
+
+      if(pba->has_dmb == _TRUE_ && rate_dmb > 0){
+        tau_dmb = 1./rate_dmb;
+        dtau_dmb = -pvecthermo[pth->index_th_ddkappa_dmb]*tau_dmb*tau_dmb;
+        dy[pv->index_pt_theta_b] +=
+          (R*beta_dmb*(a_prime_over_a-dtau_dmb/tau_dmb)*(theta_dmb-theta_b)
+           + R_dmb/tau_dmb*(theta_dmb-theta_b)
+           + R*beta_dmb*dy[pv->index_pt_theta_dmb]
+           - R*beta_dmb*metric_euler) / (1.+R+beta_dmb*R);
+      }
 
     }
 
@@ -8694,6 +8849,11 @@ int perturb_derivs(double tau,
         dy[pv->index_pt_theta_g] =
           -(dy[pv->index_pt_theta_b]+a_prime_over_a*theta_b-k2*delta_p_b_over_rho_b)/R
           +k2*(0.25*delta_g-s2_squared*ppw->tca_shear_g)+(1.+R)/R*metric_euler;
+
+	/** scattering between dark matter and baryons affects photons in TCA **/
+        if (pba->has_dmb == _TRUE_){
+          dy[pv->index_pt_theta_g] += rate_dmb*R_dmb/R * (theta_dmb-theta_b);
+        }
       }
     }
 
