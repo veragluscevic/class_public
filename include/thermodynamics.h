@@ -40,6 +40,16 @@ enum reionization_z_or_tau {
 };
 
 /**
+ * define the target particle with which dmb interacts
+ */
+
+enum select_dmb_target {
+  baryon,    /**< generic baryonic particle */
+  hydrogen,  /**< neutral and ionized hydrogen-1 */
+  helium     /**< neutral and ionized helium-4 */
+};
+
+/**
  * Two useful smooth step functions, for smoothing transitions in recfast.
  */
 
@@ -70,6 +80,8 @@ struct thermo
   enum reionization_parametrization reio_parametrization; /**< reionization scheme */
 
   enum reionization_z_or_tau reio_z_or_tau; /**< is the input parameter the reionization redshift or optical depth? */
+
+  enum select_dmb_target dmb_target; /**< define the particle with which dmb interacts */
 
   double tau_reio; /**< if above set to tau, input value of reionization optical depth */
 
@@ -151,6 +163,13 @@ struct thermo
   double annihilation_f_halo; /**< takes the contribution of DM annihilation in halos into account*/
   double annihilation_z_halo; /**< characteristic redshift for DM annihilation in halos*/
 
+  /** parameters for dmb */
+  double z_dmb_decoupling; /* redshift at which Tdmb decouples from photon-baryon fluid (relevant for n_dmb>=0) */
+  
+  int index_tidmb_tau;
+  int index_tidmb_Tdm;
+  int tidmb_size; /* number of integration indices */
+
   double a_idm_dr;      /**< strength of the coupling between interacting dark matter and interacting dark radiation (idm-idr) */
   double b_idr;         /**< strength of the self coupling for interacting dark radiation (idr-idr) */
   double nindex_idm_dr; /**< temperature dependence of the interaction between dark matter and dark radiation */
@@ -180,6 +199,7 @@ struct thermo
   int index_th_g_idm_dr;      /**< visibility function of idm_idr */
   int index_th_cidm_dr2;      /**< interacting dark matter squared sound speed \f$ c_{dm}^2 \f$ */
   int index_th_Tidm_dr;       /**< temperature of DM interacting with DR \f$ T_{idm_dr} \f$ */
+  int index_th_dTb;           /**< baryon temperature derivative \f$ d T_b / d \tau \f$ used only for dmb model */
   int index_th_Tb;            /**< baryon temperature \f$ T_b \f$ */
   int index_th_wb;            /**< baryon equation of state parameter \f$ w_b = k_B T_b / \mu \f$ */
   int index_th_cb2;           /**< squared baryon adiabatic sound speed \f$ c_b^2 \f$ */
@@ -187,6 +207,11 @@ struct thermo
   int index_th_ddcb2;         /**< second derivative wrt conformal time of squared baryon sound speed  \f$ d^2 [c_b^2] / d \tau^2 \f$ (only computed if some non0-minimal tight-coupling schemes is requested) */
   int index_th_rate;          /**< maximum variation rate of \f$ exp^{-\kappa}\f$, g and \f$ (d g / d \tau) \f$, used for computing integration step in perturbation module */
   int index_th_r_d;           /**< simple analytic approximation to the photon comoving damping scale */
+  int index_th_Tdmb;          /**< dmb temperature \f$ T_{dmb} \f$ */
+  int index_th_dkappa_dmb;    /**< dmb momentum exchange rate (units 1/Mpc) */
+  int index_th_ddkappa_dmb;   /**< dmb momentum exchange rate derivative wrt tau */
+  int index_th_dkappaT_dmb;   /**< dmb heat exchange rate (units 1/Mpc) */
+  int index_th_cdmb2;         /**< dmb speed of sound squared \f$ c_{dmb}^2 \f$ */
   int th_size;                /**< size of thermodynamics vector */
 
   //@}
@@ -473,9 +498,11 @@ struct thermodynamics_parameters_and_workspace {
   struct background * pba;
   struct precision * ppr;
   struct recombination * preco;
+  struct thermo * pth; //for dmb only
 
   /* workspace */
   double * pvecback;
+  double * pvecthermo; //for dmb only
 
 };
 

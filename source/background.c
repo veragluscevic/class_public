@@ -442,6 +442,15 @@ int background_functions(
     rho_m += pvecback[pba->index_bg_rho_idm_dr];
   }
 
+  /* dark matter scattering with baryons (dmb) */
+  if (pba->has_dmb == _TRUE_) {
+    pvecback[pba->index_bg_rho_dmb] = pba->Omega0_dmb * pow(pba->H0,2) / pow(a_rel,3);
+    rho_tot += pvecback[pba->index_bg_rho_dmb];
+    p_tot += 0.;
+    rho_m += pvecback[pba->index_bg_rho_dmb];
+  }
+
+
   /* interacting dark radiation */
   if (pba->has_idr == _TRUE_) {
     pvecback[pba->index_bg_rho_idr] = pba->Omega0_idr * pow(pba->H0,2) / pow(a_rel,4);
@@ -482,6 +491,18 @@ int background_functions(
 
   /** - compute relativistic density to total density ratio */
   pvecback[pba->index_bg_Omega_r] = rho_r / rho_crit;
+
+  /** - make place holders for dmb quantities that are computed in thermodynamics */
+  if (pba->has_dmb == _TRUE_) {
+    pvecback[pba->index_bg_Tdmb]        = pba->T_cmb / a;
+    pvecback[pba->index_bg_dkappa_dmb]  = 0.;
+    pvecback[pba->index_bg_dkappaT_dmb] = 0.;
+    pvecback[pba->index_bg_cdmb2]       = 0.;
+    pvecback[pba->index_bg_Vrel_dmb]    = pba->Vrel_dmb;
+    if((1./a - 1.) < 1000.){ // if z<1000, scale relative bulk velocity by (1+z)
+      pvecback[pba->index_bg_Vrel_dmb] *= (1./a) / 1001.; // ~(1+z)/(1+1000)
+    }
+  }
 
   /** - compute other quantities in the exhaustive, redundant format */
   if (return_format == pba->long_info) {
@@ -549,6 +570,7 @@ int background_w_fld(
     Omega_m = pba->Omega0_b;
     if (pba->has_cdm == _TRUE_) Omega_m += pba->Omega0_cdm;
     if (pba->has_idm_dr == _TRUE_) Omega_m += pba->Omega0_idm_dr;
+    if (pba->has_dmb == _TRUE_) Omega_m += pba->Omega0_dmb;
     if (pba->has_dcdm == _TRUE_)
       class_stop(pba->error_message,"Early Dark Energy not compatible with decaying Dark Matter because we omitted to code the calculation of a_eq in that case, but it would not be difficult to add it if necessary, should be a matter of 5 minutes");
     a_eq = Omega_r/Omega_m; // assumes a flat universe with a=1 today
@@ -885,6 +907,7 @@ int background_indices(
   pba->has_ur = _FALSE_;
   pba->has_idr = _FALSE_;
   pba->has_idm_dr = _FALSE_;
+  pba->has_dmb = _FALSE_;
   pba->has_curvature = _FALSE_;
 
   if (pba->Omega0_cdm != 0.)
@@ -916,6 +939,9 @@ int background_indices(
 
   if (pba->Omega0_idm_dr != 0.)
     pba->has_idm_dr = _TRUE_;
+
+  if (pba->Omega0_dmb != 0.)
+    pba->has_dmb = _TRUE_;
 
   if (pba->sgnK != 0)
     pba->has_curvature = _TRUE_;
@@ -993,6 +1019,26 @@ int background_indices(
 
   /* - index for interacting dark matter */
   class_define_index(pba->index_bg_rho_idm_dr,pba->has_idm_dr,index_bg,1);
+
+  /* - indicies for dark matter scattering with baryons (dmb) */
+  /* - index for rho_dmb */
+  class_define_index(pba->index_bg_rho_dmb,pba->has_dmb,index_bg,1);
+
+  /* - index for Tdmb */
+  class_define_index(pba->index_bg_Tdmb,pba->has_dmb,index_bg,1);
+
+  /* - index for Vrel_dmb */
+  class_define_index(pba->index_bg_Vrel_dmb,pba->has_dmb,index_bg,1);
+
+  /* - index for dmb momentum exchange rate */
+  class_define_index(pba->index_bg_dkappa_dmb,pba->has_dmb,index_bg,1);
+
+  /* - index for dmb heat exchange rate */
+  class_define_index(pba->index_bg_dkappaT_dmb,pba->has_dmb,index_bg,1);
+
+  /* - index for dmb speed of sound squared */
+  class_define_index(pba->index_bg_cdmb2,pba->has_dmb,index_bg,1);
+
 
   /* - put here additional ingredients that you want to appear in the
      normal vector */
@@ -2263,6 +2309,12 @@ int background_output_titles(struct background * pba,
   class_store_columntitle(titles,"(.)rho_ur",pba->has_ur);
   class_store_columntitle(titles,"(.)rho_idr",pba->has_idr);
   class_store_columntitle(titles,"(.)rho_idm_dr",pba->has_idm_dr);
+  class_store_columntitle(titles,"(.)rho_dmb",pba->has_dmb);
+  class_store_columntitle(titles,"T_dmb",pba->has_dmb);
+  class_store_columntitle(titles,"Vrel_dmb",pba->has_dmb);
+  class_store_columntitle(titles,"dkappa_dmb",pba->has_dmb);
+  class_store_columntitle(titles,"dkappaT_dmb",pba->has_dmb);
+  class_store_columntitle(titles,"cdmb2",pba->has_dmb);
   class_store_columntitle(titles,"(.)rho_crit",_TRUE_);
   class_store_columntitle(titles,"(.)rho_dcdm",pba->has_dcdm);
   class_store_columntitle(titles,"(.)rho_dr",pba->has_dr);
@@ -2322,6 +2374,12 @@ int background_output_data(
     class_store_double(dataptr,pvecback[pba->index_bg_rho_ur],pba->has_ur,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_idr],pba->has_idr,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_idm_dr],pba->has_idm_dr,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_rho_dmb],pba->has_dmb,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_Tdmb],pba->has_dmb,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_Vrel_dmb],pba->has_dmb,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_dkappa_dmb],pba->has_dmb,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_dkappaT_dmb],pba->has_dmb,storeidx);
+    class_store_double(dataptr,pvecback[pba->index_bg_cdmb2],pba->has_dmb,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_crit],_TRUE_,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_dcdm],pba->has_dcdm,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_dr],pba->has_dr,storeidx);
@@ -2421,6 +2479,9 @@ int background_derivs(
     rho_M += pvecback[pba->index_bg_rho_cdm];
   if (pba->has_idm_dr)
     rho_M += pvecback[pba->index_bg_rho_idm_dr];
+  if (pba->has_dmb)
+    rho_M += pvecback[pba->index_bg_rho_dmb];
+  
 
   dy[pba->index_bi_D] = y[pba->index_bi_D_prime];
   dy[pba->index_bi_D_prime] = -a*H*y[pba->index_bi_D_prime] + 1.5*a*a*rho_M*y[pba->index_bi_D];
@@ -2617,6 +2678,10 @@ int background_output_budget(
     if(pba->has_idm_dr){
       _class_print_species_("Interacting Dark Matter - DR ",idm_dr);
       budget_matter+=pba->Omega0_idm_dr;
+    }
+    if(pba->has_dmb){
+      _class_print_species_("Dark Matter Scattering with Baryons",dmb);
+      budget_matter+=pba->Omega0_dmb;
     }
     if(pba->has_dcdm){
       _class_print_species_("Decaying Cold Dark Matter",dcdm);

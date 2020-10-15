@@ -87,6 +87,16 @@ struct background
 
   double Omega0_idm_dr; /**< \f$ \Omega_{0 idm_dr} \f$: dark matter interacting with dark radiation */
 
+  double Omega0_dmb; /**< \f$ \Omega_{0 dmb} \f$: dark matter scattering with baryons */
+
+  double m_dmb; /**< \f$ m_{dmb} \f$ : mass of dark matter scattering with baryons */
+
+  double sigma_dmb; /**< \f$ \simga_{dmb} \f$ : momentum-transfer cross section of dark matter scattering with baryons, in units of cm^2 */
+
+  double n_dmb; /**< \f$ n_{dmb} \f$ : power of relative velocity of momentum-transfer cross section for dark matter scattering with baryons */
+
+  double Vrel_dmb; /**< \f$ Vrel_{dmb} \f$ : initial RMS relative bulk velocity between DM and baryons (at z >> z_rec) */
+
   double Omega0_dcdmdr; /**< \f$ \Omega_{0 dcdm}+\Omega_{0 dr} \f$: decaying cold dark matter (dcdm) decaying to dark radiation (dr) */
 
   double Gamma_dcdm; /**< \f$ \Gamma_{dcdm} \f$: decay constant for decaying cold dark matter */
@@ -193,6 +203,14 @@ struct background
   int index_bg_rho_idr;       /**< density of interacting dark radiation */
   int index_bg_rho_dcdm;      /**< dcdm density */
   int index_bg_rho_dr;        /**< dr density */
+
+  int index_bg_rho_dmb;       /**< density of dark matter scattering with baryons */
+  int index_bg_Vrel_dmb;      /**< dmb RMS relative bulk velocity of DM and baryons */
+  int index_bg_Tdmb;          /**< dmb temperature */
+  int index_bg_dkappa_dmb;    /**< dmb momentum exchange rate (units 1/Mpc) */
+  int index_bg_dkappaT_dmb;   /**< dmb heat exchange rate (units 1/Mpc) */
+  int index_bg_cdmb2;         /**< dmb speed of sound squared \f$ c_{dmb}^2 \f$ */
+
 
   int index_bg_phi_scf;       /**< scalar field value */
   int index_bg_phi_prime_scf; /**< scalar field derivative wrt conformal time */
@@ -304,6 +322,7 @@ struct background
   short has_ur;        /**< presence of ultra-relativistic neutrinos/relics? */
   short has_idr;       /**< presence of interacting dark radiation? */
   short has_idm_dr;    /**< presence of dark matter interacting with dark radiation? */
+  short has_dmb;       /**< presence of dark matter scattering with baryons? */
   short has_curvature; /**< presence of global spatial curvature? */
 
   //@}

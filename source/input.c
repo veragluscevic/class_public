@@ -910,6 +910,88 @@ int input_read_parameters(
 
   Omega_tot += pba->Omega0_cdm;
 
+    /** - Omega_0_dmb (DMB) */
+  class_call(parser_read_double(pfc,"Omega_dmb",&param1,&flag1,errmsg),
+             errmsg,
+             errmsg);
+  class_call(parser_read_double(pfc,"omega_dmb",&param2,&flag2,errmsg),
+             errmsg,
+             errmsg);
+  class_test(((flag1 == _TRUE_) && (flag2 == _TRUE_)),
+             errmsg,
+             "In input file, you can only enter one of Omega_dmb or omega_dmb, choose one!");
+  if (flag1 == _TRUE_)
+    pba->Omega0_dmb = param1;
+  if (flag2 == _TRUE_)
+    pba->Omega0_dmb = param2/pba->h/pba->h;
+
+  if ((ppt->gauge == synchronous) && (pba->Omega0_cdm==0) && (pba->Omega0_dmb==0)) pba->Omega0_dmb = ppr->Omega0_cdm_min_synchronous;
+
+  Omega_tot += pba->Omega0_dmb;
+
+  if(pba->Omega0_dmb > 0){
+
+    /* m_dmb in kg */
+    class_call(parser_read_double(pfc,"m_dmb",&param1,&flag1,errmsg),
+               errmsg,
+               errmsg);
+    if (flag1 == _TRUE_) {
+      class_test(pba->m_dmb < 0, errmsg, "In input file, must set m_dmb >= 0 (particle mass cannot be negative)!");
+      pba->m_dmb = param1 * 1.0e9 * _eV_ / (_c_ * _c_); // convert GeV to kg
+    }
+
+    /* n_dmb */
+    class_read_double("n_dmb", pba->n_dmb);
+    class_test(pba->n_dmb < -4, errmsg, "In input file, must set n_dmb >= -4!");
+
+    /* sigma_dmb in cm^2 */
+    class_call(parser_read_double(pfc,"sigma_dmb",&param1,&flag1,errmsg),
+               errmsg,
+               errmsg);
+    class_call(parser_read_double(pfc,"log10sigma_dmb",&param2,&flag2,errmsg),
+               errmsg,
+               errmsg);
+    class_test(((flag1 == _TRUE_) && (flag2 == _TRUE_)),
+               errmsg,
+               "In input file, you can only enter one of sigma_dmb or log10sigma_dmb, choose one");
+    if (flag1 == _TRUE_)
+      pba->sigma_dmb = param1 / 10000.; // convert to m^2
+    if (flag2 == _TRUE_)
+      pba->sigma_dmb = pow(10,param2) / 10000.; // convert to m^2
+
+    /** - target particle for dmb interactions */
+    class_call(parser_read_string(pfc,"dmb_target",&string1,&flag1,errmsg),
+               errmsg,
+               errmsg);
+
+    if (flag1 == _TRUE_) {
+
+      if ((strstr(string1,"baryon") != NULL)) {
+        pth->dmb_target = baryon;
+      }
+      else if ((strstr(string1,"hydrogen") != NULL)) {
+        pth->dmb_target = hydrogen;
+      }
+      else if ((strstr(string1,"helium") != NULL)) {
+        pth->dmb_target = helium;
+      }
+      else{
+        class_stop(errmsg,"Incomprehensible input '%s' for the field 'dmb_target'",string1);
+      }
+
+    }
+
+    /* relative bulk velocity dispersion between DM and baryons in km/s (dmb) */
+    class_call(parser_read_double(pfc,"Vrel_dmb",&param1,&flag1,errmsg),
+               errmsg,
+               errmsg);
+    if (flag1 == _TRUE_)
+      pba->Vrel_dmb = param1 * 1.0e3; //convert to m/s
+
+  }
+
+
+
   /** - Omega_0_icdm_dr (DM interacting with DR) */
   class_call(parser_read_double(pfc,"Omega_idm_dr",&param1,&flag1,errmsg),
              errmsg,
@@ -3183,6 +3265,11 @@ int input_default_params(
   pba->T_idr = 0.0;
   pba->Omega0_b = 0.022032/pow(pba->h,2);
   pba->Omega0_cdm = 0.12038/pow(pba->h,2);
+  pba->Omega0_dmb = 0.0;
+  pba->m_dmb = 1.0 * 1.0e9 * _eV_ / (_c_ * _c_); /* in kg */
+  pba->n_dmb = 0;
+  pba->Vrel_dmb = 30.0 * 1.0e3; /* in m/sec */
+  pba->sigma_dmb = 0.0; /* in m^2 */
   pba->Omega0_dcdmdr = 0.0;
   pba->Omega0_dcdm = 0.0;
   pba->Gamma_dcdm = 0.0;
@@ -3209,7 +3296,7 @@ int input_default_params(
   pba->Omega0_k = 0.;
   pba->K = 0.;
   pba->sgnK = 0;
-  pba->Omega0_lambda = 1.-pba->Omega0_k-pba->Omega0_g-pba->Omega0_ur-pba->Omega0_b-pba->Omega0_cdm-pba->Omega0_ncdm_tot-pba->Omega0_dcdmdr-pba->Omega0_idm_dr-pba->Omega0_idr;
+  pba->Omega0_lambda = 1.-pba->Omega0_k-pba->Omega0_g-pba->Omega0_ur-pba->Omega0_b-pba->Omega0_cdm-pba->Omega0_ncdm_tot-pba->Omega0_dcdmdr-pba->Omega0_idm_dr-pba->Omega0_idr-pba->Omega0_dmb;
   pba->Omega0_fld = 0.;
   pba->a_today = 1.;
   pba->use_ppf = _TRUE_;
@@ -3259,6 +3346,7 @@ int input_default_params(
   pth->b_idr = 0.;
   pth->nindex_idm_dr = 4.;
   pth->m_idm = 1.e11;
+  pth->dmb_target = hydrogen;
 
   /** - perturbation structure */
 
@@ -3954,7 +4042,7 @@ int input_get_guess(double *xguess,
       ba.H0 = ba.h *  1.e5 / _c_;
       break;
     case Omega_dcdmdr:
-      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+ba.Omega0_dcdmdr+ba.Omega0_b;
+      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+ba.Omega0_dcdmdr+ba.Omega0_b+ba.Omega0_dmb;
       /* This formula is exact in a Matter + Lambda Universe, but only
          for Omega_dcdm, not the combined.
          sqrt_one_minus_M = sqrt(1.0 - Omega_M);
@@ -3973,7 +4061,7 @@ int input_get_guess(double *xguess,
       //printf("x = Omega_ini_guess = %g, dxdy = %g\n",*xguess,*dxdy);
       break;
     case omega_dcdmdr:
-      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+ba.Omega0_dcdmdr+ba.Omega0_b;
+      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+ba.Omega0_dcdmdr+ba.Omega0_b+ba.Omega0_dmb;
       /* This formula is exact in a Matter + Lambda Universe, but only
          for Omega_dcdm, not the combined.
          sqrt_one_minus_M = sqrt(1.0 - Omega_M);
@@ -4017,7 +4105,7 @@ int input_get_guess(double *xguess,
           Omega_ini_dcdm -> Omega_dcdmdr and
           omega_ini_dcdm -> omega_dcdmdr */
       Omega0_dcdmdr *=pfzw->target_value[index_guess];
-      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+Omega0_dcdmdr+ba.Omega0_b;
+      Omega_M = ba.Omega0_cdm+ba.Omega0_idm_dr+Omega0_dcdmdr+ba.Omega0_b+ba.Omega0_dmb;
       gamma = ba.Gamma_dcdm/ba.H0;
       if (gamma < 1)
         a_decay = 1.0;

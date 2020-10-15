@@ -155,6 +155,8 @@ int thermodynamics_at_z(
     /* Calculate Tb */
     pvecthermo[pth->index_th_Tb] = pba->T_cmb*(1.+z);
 
+    pvecthermo[pth->index_th_dTb] = -pba->T_cmb*pvecback[pba->index_bg_H]; //added for dmb
+
     /* Calculate baryon equation of state parameter wb = (k_B/mu) Tb */
     /* note that m_H / mu = 1 + (m_H/m_He-1) Y_p + x_e (1-Y_p) */
     pvecthermo[pth->index_th_wb] = _k_B_ / ( _c_ * _c_ * _m_H_ ) * (1. + (1./_not4_ - 1.) * pth->YHe + x0 * (1.-pth->YHe)) * pba->T_cmb * (1.+z);
@@ -175,6 +177,14 @@ int thermodynamics_at_z(
 
     /* in this regime, variation rate = dkappa/dtau */
     pvecthermo[pth->index_th_rate] = pvecthermo[pth->index_th_dkappa];
+
+    /* dmb, call thermodynamics_dmb_rate to fill pvecthermo with other dmb quantities */
+    if(pba->has_dmb == _TRUE_){
+      pvecthermo[pth->index_th_Tdmb] = pvecback[pba->index_bg_Tdmb];
+      class_call(thermodynamics_dmb_rate(pba,pth,pvecback,pvecthermo),
+                 pth->error_message,
+                 pth->error_message);
+    }
 
     /* quantities related to DM interacting with DR */
     if(pba->has_idm_dr == _TRUE_){
@@ -378,9 +388,9 @@ int thermodynamics_init(
              pth->error_message,
              "characteristic annihilation redshift cannot be negative");
 
-  class_test((pth->annihilation>0) && ((pba->has_cdm==_FALSE_)&&(pba->has_idm_dr==_FALSE_)),
+  class_test((pth->annihilation>0) && ((pba->has_cdm==_FALSE_)&&(pba->has_idm_dr==_FALSE_)&&(pba->has_dmb==_FALSE_)),
              pth->error_message,
-             "CDM annihilation effects require the presence of CDM or IDM!");
+             "CDM annihilation effects require the presence of CDM or IDM or DMB!");
 
   class_test((pth->annihilation_f_halo>0) && (pth->recombination==recfast),
              pth->error_message,
@@ -402,9 +412,9 @@ int thermodynamics_init(
              pth->error_message,
              "decay parameter cannot be negative");
 
-  class_test((pth->decay>0)&&((pba->has_cdm==_FALSE_)&&(pba->has_idm_dr==_FALSE_)),
+  class_test((pth->decay>0)&&((pba->has_cdm==_FALSE_)&&(pba->has_idm_dr==_FALSE_)&&(pba->has_dmb==_FALSE_)),
              pth->error_message,
-             "CDM decay effects require the presence of CDM or IDM!");
+             "CDM decay effects require the presence of CDM or IDM or DMB!");
 
   /* tests in order to prevent segmentation fault in the following */
   class_test(_not4_ == 0.,
@@ -471,6 +481,40 @@ int thermodynamics_init(
   /** - store initial value of conformal time in the structure */
 
   pth->tau_ini = tau_table[pth->tt_size-1];
+
+  if (pba->has_dmb == _TRUE_){
+    /* Initialize zdec to something unphysical. */
+    pth->z_dmb_decoupling = -1.0;
+
+    /* fill dTb by splining, use Tdmb as temporary place holder for 2nd derivative of Tb */
+    class_call(array_spline_table_line_to_line(tau_table,
+                                               pth->tt_size,
+                                               pth->thermodynamics_table,
+                                               pth->th_size,
+                                               pth->index_th_Tb,
+                                               pth->index_th_Tdmb,
+                                               _SPLINE_EST_DERIV_,
+                                               pth->error_message),
+               pth->error_message,
+               pth->error_message);
+
+    class_call(array_derive_spline_table_line_to_line(tau_table,
+                                                      pth->tt_size,
+                                                      pth->thermodynamics_table,
+                                                      pth->th_size,
+                                                      pth->index_th_Tb,
+                                                      pth->index_th_Tdmb,
+                                                      pth->index_th_dTb,
+                                                      pth->error_message),
+               pth->error_message,
+               pth->error_message);
+
+    /* integrate dmb temperature over same range in z as background quantities */
+    class_call(thermodynamics_dmb_temperature(ppr,pba,pth),
+               pth->error_message,
+               pth->error_message);
+  }
+
 
   /** - fill missing columns (quantities not computed previously but related) */
 
@@ -1356,6 +1400,8 @@ int thermodynamics_indices(
   index++;
   pth->index_th_Tb = index;
   index++;
+  pth->index_th_dTb = index; //added for dmb only
+  index++;
   pth->index_th_wb = index;
   index++;
   pth->index_th_cb2 = index;
@@ -1382,6 +1428,21 @@ int thermodynamics_indices(
     index++;
   }
 
+  /* dmb quantities */
+  if(pba->has_dmb == _TRUE_){
+    pth->index_th_Tdmb = index;
+    index++;
+    pth->index_th_dkappa_dmb = index;
+    index++;
+    pth->index_th_ddkappa_dmb = index;
+    index++;
+    pth->index_th_dkappaT_dmb = index;
+    index++;
+    pth->index_th_cdmb2 = index;
+    index++;
+  }
+
+
   /* derivatives of baryon sound speed (only computed if some non-minimal tight-coupling schemes is requested) */
   if (pth->compute_cb2_derivatives == _TRUE_) {
     pth->index_th_dcb2 = index;
@@ -1400,6 +1461,18 @@ int thermodynamics_indices(
 
   /* end of indices */
   pth->th_size = index;
+
+  /** - initialization of indices for dmb temperature integration */
+  if(pba->has_dmb == _TRUE_){
+    index = 0;
+
+    pth->index_tidmb_Tdm = index;
+    index++;
+    pth->index_tidmb_tau = index; // must be the last index
+    index++;
+
+    pth->tidmb_size = index;
+  }
 
   /** - initialization of all indices and flags in recombination structure */
   index = 0;
@@ -1807,7 +1880,7 @@ int thermodynamics_onthespot_energy_injection(
                                          +pow(log((preco->annihilation_zmin+1.)/(preco->annihilation_zmax+1.)),2)));
   }
 
-  rho_cdm_today = pow(pba->H0*_c_/_Mpc_over_m_,2)*3/8./_PI_/_G_*(pba->Omega0_idm_dr+pba->Omega0_cdm)*_c_*_c_; /* energy density in J/m^3 */
+  rho_cdm_today = pow(pba->H0*_c_/_Mpc_over_m_,2)*3/8./_PI_/_G_*(pba->Omega0_idm_dr+pba->Omega0_cdm+pba->Omega0_dmb)*_c_*_c_; /* energy density in J/m^3 */
 
   u_min = (1+z)/(1+preco->annihilation_z_halo);
 
@@ -1860,7 +1933,7 @@ int thermodynamics_energy_injection(
       nH0 = 3.*preco->H0*preco->H0*pba->Omega0_b/(8.*_PI_*_G_*_m_H_)*(1.-preco->YHe);
 
       /* factor = c sigma_T n_H(0) / (H(0) \sqrt(Omega_m)) (dimensionless) */
-      factor = _sigma_ * nH0 / pba->H0 * _Mpc_over_m_ / sqrt(pba->Omega0_b+pba->Omega0_cdm+pba->Omega0_idm_dr);
+      factor = _sigma_ * nH0 / pba->H0 * _Mpc_over_m_ / sqrt(pba->Omega0_b+pba->Omega0_cdm+pba->Omega0_idm_dr+pba->Omega0_dmb);
 
       /* integral over z'(=zp) with step dz */
       dz=1.;
@@ -3156,7 +3229,7 @@ int thermodynamics_recombination_with_hyrec(
 
   param.T0 = pba->T_cmb;
   param.obh2 = pba->Omega0_b*pba->h*pba->h;
-  param.omh2 = (pba->Omega0_b+pba->Omega0_cdm+pba->Omega0_idm_dr+pba->Omega0_ncdm_tot)*pba->h*pba->h;
+  param.omh2 = (pba->Omega0_b+pba->Omega0_cdm+pba->Omega0_idm_dr+pba->Omega0_ncdm_tot+pba->Omega0_dmb)*pba->h*pba->h;
   param.okh2 = pba->Omega0_k*pba->h*pba->h;
   param.odeh2 = (pba->Omega0_lambda+pba->Omega0_fld)*pba->h*pba->h;
   class_call(background_w_fld(pba,pba->a_today,&w_fld,&dw_over_da_fld,&integral_fld), pba->error_message, pth->error_message);
@@ -3466,6 +3539,9 @@ int thermodynamics_recombination_with_recfast(
 
   /* introduced by JL for smoothing the various steps */
   double x0_previous,x0_new,s,weight;
+
+  /* needed for dmb (tpaw expects pvecthermo and pth for dmb, but is not used here) */
+  double *pvecthermo;
 
   /* contains all quantities relevant for the integration algorithm */
   struct generic_integrator_workspace gi;
@@ -4137,6 +4213,8 @@ int thermodynamics_merge_reco_and_reio(
 
   if(pba->has_idm_dr == _TRUE_) pth->tt_size += ppr->thermo_Nz1_idm_dr + ppr->thermo_Nz2_idm_dr - 1;
 
+  //VG: should dmb added here?
+
   /** - allocate arrays in thermo structure */
 
   class_alloc(pth->z_table,pth->tt_size*sizeof(double),pth->error_message);
@@ -4206,6 +4284,7 @@ int thermodynamics_merge_reco_and_reio(
       }
 
   }
+    //VG should dmb be added here?
 
   /** - free the temporary structures */
 
@@ -4253,6 +4332,14 @@ int thermodynamics_output_titles(struct background * pba,
     class_store_columntitle(titles,"c_idm_dr^2",_TRUE_);
     class_store_columntitle(titles,"T_idm_dr",_TRUE_);
     class_store_columntitle(titles,"dmu_idr",_TRUE_);
+  }
+
+  if(pba->has_dmb == _TRUE_){
+    class_store_columntitle(titles,"T_dmb",_TRUE_);
+    class_store_columntitle(titles,"rate_dmb_mom [Mpc^-1]",_TRUE_);
+    class_store_columntitle(titles,"rate_dmb_mom'",_TRUE_);
+    class_store_columntitle(titles,"rate_dmb_temp [Mpc^-1]",_TRUE_);
+    class_store_columntitle(titles,"c_dmb^2",_TRUE_);
   }
 
   return _SUCCESS_;
@@ -4315,6 +4402,13 @@ int thermodynamics_output_data(struct background * pba,
       class_store_double(dataptr,pvecthermo[pth->index_th_Tidm_dr],_TRUE_,storeidx);
       class_store_double(dataptr,pvecthermo[pth->index_th_dmu_idr],_TRUE_,storeidx);
     }
+    if(pba->has_dmb == _TRUE_){
+      class_store_double(dataptr,pvecthermo[pth->index_th_Tdmb],_TRUE_,storeidx);
+      class_store_double(dataptr,pvecthermo[pth->index_th_dkappa_dmb],_TRUE_,storeidx);
+      class_store_double(dataptr,pvecthermo[pth->index_th_ddkappa_dmb],_TRUE_,storeidx);
+      class_store_double(dataptr,pvecthermo[pth->index_th_dkappaT_dmb],_TRUE_,storeidx);
+      class_store_double(dataptr,pvecthermo[pth->index_th_cdmb2],_TRUE_,storeidx);
+    }
   }
 
   return _SUCCESS_;
@@ -4330,3 +4424,403 @@ int thermodynamics_tanh(double x,
   *result = before + (after-before)*(tanh((x-center)/width)+1.)/2.;
 
   return _SUCCESS_;}
+
+
+
+/**
+ *  This function calculates the rates (in 1/Mpc, same as Hubble) associated
+ *  with momentum exchange (dkappa) and temperature exchange (dkappaT) during
+ *  DM-baryon scattering, for dmb. These rates are saved in pvecthermo.
+ *
+ *  The output is saved in pvecthermo entries:
+ *      pth->index_th_dkappa_dmb
+ *      pth->index_th_ddkappa_dmb
+ *      pth->index_th_dkappaT_dmb
+ *      pth->index_th_cdmb2
+ *
+ *  Input thermodynamics vector can be empty except:
+ *  Must input     dmb temperature via pvecthermo[pth->index_th_Tdmb].
+ *  Must input    baryon temperature via pvecthermo[pth->index_th_Tb].
+ *  Must input        its derivative via pvecthermo[pth->index_th_dTb].
+ *  Must input   ionization fraction via pvecthermo[pth->index_th_xe].
+ *
+ * @param pba        Input:        background structure
+ * @param pth        Input:        thermodynamics structure
+ * @param pvecback   Input:        background vector as workspace
+ * @param pvecthermo Input/Output: thermodynamics vector as workspace
+ *
+ */
+
+int thermodynamics_dmb_rate(struct background *pba,
+                              struct thermo *pth,
+                              double *pvecback,
+                              double *pvecthermo){
+
+  double z, a, H, rho_baryon, mu;
+  double mass_target,rho_target;
+  double Tb, Tdmb, dTb, dTdmb;
+  double cn, vth2, Vrel2, rate_mom, rate_heat;
+
+  /* Initialize quantities to save in pvecthermo. */
+  pvecthermo[pth->index_th_dkappa_dmb]  = 0.0;
+  pvecthermo[pth->index_th_ddkappa_dmb] = 0.0;
+  pvecthermo[pth->index_th_dkappaT_dmb] = 0.0;
+  pvecthermo[pth->index_th_cdmb2] = 0.0;
+
+  /* Check if there is any interaction at all. */
+  if(pba->sigma_dmb == 0.0){
+    return _SUCCESS_;
+  }
+
+  /* Extract background quantities. */
+  a = pvecback[pba->index_bg_a] / pba->a_today;
+  H = pvecback[pba->index_bg_H];
+  z = 1./a - 1.;
+
+  /* baryon density (which includes He), converted into units of kg / m^2 / Mpc */
+  rho_baryon = pvecback[pba->index_bg_rho_b] * 3.*_c_*_c_/(8.*_PI_*_G_*_Mpc_over_m_);
+  mu = _m_H_/(1. + (1./_not4_ - 1.) * pth->YHe + pvecthermo[pth->index_th_xe] * (1.-pth->YHe));
+
+  /* Extract temperatures. */
+  Tdmb = pvecthermo[pth->index_th_Tdmb];
+  Tb   = pvecthermo[pth->index_th_Tb];
+
+  /* set info for target particle that interacts with DM */
+  if (pth->dmb_target == baryon){ // generic baryon
+    mass_target = mu;
+    rho_target  = rho_baryon;
+  }
+  else if (pth->dmb_target == hydrogen){ // neutral and ionized hydrogen
+    mass_target = _m_H_;
+    rho_target  = (1.-pth->YHe)*rho_baryon;
+  }
+  else if (pth->dmb_target == helium){ // neutral and ionized helium
+    mass_target = _m_H_ * _not4_;
+    rho_target  = pth->YHe*rho_baryon;
+  }
+
+  /* rates */
+  
+  cn = pow(2.,(pba->n_dmb + 5.)/2.) * tgamma(3. + pba->n_dmb / 2.) / (3.*_SQRT_PI_);
+  Vrel2 = pow(pvecback[pba->index_bg_Vrel_dmb],2);
+  
+  /* thermal dispersion */
+  vth2 = (Tdmb*_k_B_) / pba->m_dmb + (Tb*_k_B_) / mass_target + Vrel2/3.;
+
+  rate_mom  = a * rho_target * cn * pba->sigma_dmb/(pba->m_dmb + mass_target) * pow(vth2/(_c_*_c_), (pba->n_dmb + 1.)/2.);
+  rate_heat = rate_mom * pba->m_dmb / (pba->m_dmb + mass_target);
+
+  pvecthermo[pth->index_th_dkappa_dmb]  += rate_mom; 
+  pvecthermo[pth->index_th_dkappaT_dmb] += rate_heat;
+
+  /* derivatives */
+  dTdmb = -2.*a*H*Tdmb + 2.*pvecthermo[pth->index_th_dkappaT_dmb] * (Tb - Tdmb); // dTdmb/dtau
+  dTb = pvecthermo[pth->index_th_dTb]; // dTb/dtau
+  pvecthermo[pth->index_th_ddkappa_dmb] = -2.*a*H + (pba->n_dmb + 1.)/2. * _k_B_ * (dTdmb/pba->m_dmb + dTb/mass_target) / vth2;
+  pvecthermo[pth->index_th_ddkappa_dmb] *= rate_mom;
+
+  /* Also fill in c^2 for dmb. */
+  pvecthermo[pth->index_th_cdmb2] = _k_B_/(pba->m_dmb*_c_*_c_) * (Tdmb - dTdmb/(3.*a*H));
+
+  return _SUCCESS_;
+}
+
+/**
+ *  Subroutine evaluating the derivative with respect to conformal time
+ *  of dmb quantities.
+ *
+ * This is one of the few functions in the code which is passed to
+ * the generic_integrator() routine.  Since generic_integrator()
+ * should work with functions passed from various modules, the format
+ * of the arguments is a bit special:
+ *
+ * - fixed input parameters and workspaces are passed through a generic
+ * pointer. Here, this is just a pointer to the background structure
+ * and to a background vector, but generic_integrator() doesn't know
+ * its fine structure.
+ *
+ * - the error management is a bit special: errors are not written as
+ * usual to pba->error_message, but to a generic error_message passed
+ * in the list of arguments.
+ *
+ * @param tau                      Input: conformal time
+ * @param y                        Input: vector of variable
+ * @param dy                       Output: its derivative (already allocated)
+ * @param parameters_and_workspace Input: pointer to fixed parameters (e.g. indices)
+ * @param error_message            Output: error message
+ */
+
+int thermodynamics_dmb_derivs(double tau,
+                                double *y,
+                                double *dy,
+                                void * parameters_and_workspace,
+                                ErrorMsg error_message){
+
+  struct thermodynamics_parameters_and_workspace * ptpaw;
+  struct background * pba;
+  struct thermo *pth;
+  double * pvecback;
+  double * pvecthermo;
+  double a,H,z;
+  int last_index;
+
+  ptpaw = parameters_and_workspace;
+  pba  = ptpaw->pba;
+  pth  = ptpaw->pth;
+  pvecback   = ptpaw->pvecback;
+  pvecthermo = ptpaw->pvecthermo;
+
+  /* Extract background. */
+  class_call(background_at_tau(pba,
+                               tau,
+                               pba->normal_info,
+                               pba->inter_normal,
+                               &last_index,
+                               pvecback),
+             pba->error_message,
+             pth->error_message);
+
+  a = pvecback[pba->index_bg_a];
+  H = pvecback[pba->index_bg_H];
+  z = 1./a - 1.;
+
+  /* Extract thermodynamics. Table has been splined in thermodynamics_dmb_temperature. */
+  if(tau > pth->tau_ini){
+    class_call(array_interpolate_spline(pth->z_table,
+                                        pth->tt_size,
+                                        pth->thermodynamics_table,
+                                        pth->d2thermodynamics_dz2_table,
+                                        pth->th_size,
+                                        z,
+                                        &last_index,
+                                        pvecthermo,
+                                        pth->th_size,
+                                        pth->error_message),
+               pth->error_message,
+               pth->error_message);
+  } else {
+    pvecthermo[pth->index_th_Tb] = pba->T_cmb / a;
+    pvecthermo[pth->index_th_dTb] = -pba->T_cmb * H;
+    pvecthermo[pth->index_th_xe] = 1. + 2.*pth->YHe / (_not4_ * (1.-pth->YHe));
+  }
+  pvecthermo[pth->index_th_Tdmb] = y[pth->index_tidmb_Tdm];
+
+  /* Obtain momentum and energy exchange rates. */
+  class_call(thermodynamics_dmb_rate(pba,pth,pvecback,pvecthermo),
+             pth->error_message,
+             pth->error_message);
+
+  /** compute dmb temperature \f$ T_\chi' = -2aH T_\chi + 2 R_{\chi,temp} * (T_b - T_\chi) \f$ */
+  if (z > pth->z_dmb_decoupling){
+    dy[pth->index_tidmb_Tdm] = -a*H*y[pth->index_tidmb_Tdm];
+  } else {
+    dy[pth->index_tidmb_Tdm] = -2.*a*H*y[pth->index_tidmb_Tdm];
+    dy[pth->index_tidmb_Tdm] += 2.*pvecthermo[pth->index_th_dkappaT_dmb] * (pvecthermo[pth->index_th_Tb] - y[pth->index_tidmb_Tdm]);
+  }
+
+  return _SUCCESS_;
+}
+
+/**
+ *  This function integrates to find the dmb temperature.
+ *  It is a good approximation when baryons are tightly coupled
+ *  to photons (before recombination). Beyond that, these values
+ *  should not be used. Results are saved to background structure.
+ *
+ * @param ppr Input: precision structure
+ * @param pba Input/Output: background structure
+ * @param pth Input/Output: thermodynamics structure
+ */
+
+
+int thermodynamics_dmb_temperature(struct precision *ppr,
+                                     struct background *pba,
+                                     struct thermo *pth){
+
+  struct generic_integrator_workspace gi;
+  growTable gTable;
+  double * pData;
+
+  struct thermodynamics_parameters_and_workspace tpaw;
+  double * pvecback;
+  double * pvecthermo;
+  double * pvecdmb_integration;
+  double * pvecdmb_derivs;
+  int last_index;
+
+  int index_ti, index_tau, index_bg;
+  double tau_start, tau_end;
+  int tt_size_check;
+
+  double a,H,tau;
+
+  /* Allocate memory. */
+  class_alloc(pvecback, pba->bg_size*sizeof(double),pth->error_message);
+  class_alloc(pvecthermo, pth->th_size*sizeof(double),pth->error_message);
+  class_alloc(pvecdmb_integration, pth->tidmb_size*sizeof(double),pth->error_message);
+  class_alloc(pvecdmb_derivs, pth->tidmb_size*sizeof(double),pth->error_message);
+
+  tpaw.pba = pba;
+  tpaw.pth = pth;
+  tpaw.ppr = ppr;
+  tpaw.pvecback = pvecback;
+  tpaw.pvecthermo = pvecthermo;
+
+  /* Create spline for thermodynamics table. */
+  class_call(array_spline_table_lines(pth->z_table,
+                                      pth->tt_size,
+                                      pth->thermodynamics_table,
+                                      pth->th_size,
+                                      pth->d2thermodynamics_dz2_table,
+                                      _SPLINE_EST_DERIV_,
+                                      pth->error_message),
+             pth->error_message,
+             pth->error_message);
+
+  /* Initialize integrator (tau is not integrated). */
+  class_call(initialize_generic_integrator((pth->tidmb_size-1),&gi),
+             gi.error_message,
+             pth->error_message);
+  class_call(gt_init(&gTable),
+             gTable.error_message,
+             pth->error_message);
+
+  /* Set initial condition for integration. */
+  a = pba->background_table[pba->index_bg_a];
+  pvecdmb_integration[pth->index_tidmb_Tdm] = pba->T_cmb / a;
+  pvecdmb_integration[pth->index_tidmb_tau] = pba->tau_table[0];
+  tau_end = pvecdmb_integration[pth->index_tidmb_tau];
+  tt_size_check = 0;
+
+  /** - loop over integration steps (use same steps as background) */
+  for(index_tau=0; index_tau < pba->bt_size-1; index_tau++){
+    tau_start = tau_end;
+    tau_end   = pba->tau_table[index_tau+1];
+
+    /* -> save data in growTable */
+    class_call(gt_add(&gTable,_GT_END_,(void *) pvecdmb_integration,sizeof(double)*pth->tidmb_size),
+               gTable.error_message,
+               pth->error_message);
+    tt_size_check++;
+
+    /* -> perform one step */
+    class_call(generic_integrator(thermodynamics_dmb_derivs,
+                                  tau_start,
+                                  tau_end,
+                                  pvecdmb_integration,
+                                  &tpaw,
+                                  ppr->tol_Tdmb_integration,
+                                  ppr->smallest_allowed_variation,
+                                  &gi),
+               gi.error_message,
+               pth->error_message);
+
+    /* -> store value of tau */
+    pvecdmb_integration[pth->index_tidmb_tau]=tau_end;
+
+    /* -> Test when Hubble rate surpasses 1/100 of the rate of dmb interactions,
+       and set decoupling to this value. **/
+    if(pth->z_dmb_decoupling < 0.0){
+      a = pvecback[pba->index_bg_a];
+      H = pvecback[pba->index_bg_H];
+      if(a*H > pvecthermo[pth->index_th_dkappaT_dmb]/100.){
+        pth->z_dmb_decoupling = 1./a - 1.;
+      }
+    }
+
+
+  } // end loop
+
+  /** - save last data in growTable with gt_add() */
+  class_call(gt_add(&gTable,_GT_END_,(void *) pvecdmb_integration,sizeof(double)*pth->tidmb_size),
+             gTable.error_message,
+             pth->error_message);
+  tt_size_check++;
+
+  class_test(tt_size_check != pba->bt_size,
+             pth->error_message,
+             "dmb: Tdmb size %d should be size %d\n",tt_size_check,pba->bt_size);
+
+  /* integration finished */
+
+  /** - clean up generic integrator with cleanup_generic_integrator() */
+  class_call(cleanup_generic_integrator(&gi),
+             gi.error_message,
+             pth->error_message);
+
+  /** - retrieve data stored in the growTable with gt_getPtr() */
+  class_call(gt_getPtr(&gTable,(void**)&pData),
+             gTable.error_message,
+             pth->error_message);
+
+  /** - extract integration results and store Tdmb in background table */
+  for (index_tau=0; index_tau < pba->bt_size; index_tau++) {
+    tau = pba->tau_table[index_tau];
+    // derivatives not needed, but this will fill pvecthermo appropriately
+    pvecdmb_integration[pth->index_tidmb_tau] = tau;
+    pvecdmb_integration[pth->index_tidmb_Tdm] = pData[index_tau*pth->tidmb_size+pth->index_tidmb_Tdm];
+
+    class_call(thermodynamics_dmb_derivs(tau, pvecdmb_integration, pvecdmb_derivs, &tpaw, pth->error_message),
+               pth->error_message,
+               pth->error_message);
+
+    pba->background_table[index_tau*pba->bg_size+pba->index_bg_Tdmb]        = pvecthermo[pth->index_th_Tdmb];
+    pba->background_table[index_tau*pba->bg_size+pba->index_bg_dkappa_dmb]  = pvecthermo[pth->index_th_dkappa_dmb];
+    pba->background_table[index_tau*pba->bg_size+pba->index_bg_dkappaT_dmb] = pvecthermo[pth->index_th_dkappaT_dmb];
+    pba->background_table[index_tau*pba->bg_size+pba->index_bg_cdmb2]       = pvecthermo[pth->index_th_cdmb2];
+  }
+
+  /* Recreate background table of derivatives */
+  class_call(array_spline_table_lines(pba->tau_table,
+                                      pba->bt_size,
+                                      pba->background_table,
+                                      pba->bg_size,
+                                      pba->d2background_dtau2_table,
+                                      _SPLINE_EST_DERIV_,
+                                      pth->error_message),
+             pth->error_message,
+             pth->error_message);
+
+
+  /* fill missing thermo quantities */
+  for (index_tau=0; index_tau < pth->tt_size; index_tau++){
+    class_call(background_tau_of_z(pba,
+                                   pth->z_table[index_tau],
+                                   &tau),
+               pba->error_message,
+               pth->error_message);
+
+    class_call(background_at_tau(pba,
+                                 tau,
+                                 pba->normal_info,
+                                 pba->inter_normal,
+                                 &last_index,
+                                 pvecback),
+               pba->error_message,
+               pth->error_message);
+
+    pvecthermo[pth->index_th_Tdmb] = pvecback[pba->index_bg_Tdmb];
+    pvecthermo[pth->index_th_Tb]     = pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_Tb];
+    pvecthermo[pth->index_th_dTb]    = pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_dTb];
+    pvecthermo[pth->index_th_xe]     = pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_xe];
+    class_call(thermodynamics_dmb_rate(pba,pth,pvecback,pvecthermo),
+               pth->error_message,
+               pth->error_message);
+    pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_Tdmb]  = pvecthermo[pth->index_th_Tdmb];
+    pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_dkappa_dmb]  = pvecthermo[pth->index_th_dkappa_dmb];
+    pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_ddkappa_dmb] = pvecthermo[pth->index_th_ddkappa_dmb];
+    pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_dkappaT_dmb] = pvecthermo[pth->index_th_dkappaT_dmb];
+    pth->thermodynamics_table[index_tau*pth->th_size+pth->index_th_cdmb2] = pvecthermo[pth->index_th_cdmb2];
+  }
+
+  /* Free memory. */
+  class_call(gt_free(&gTable),
+             gTable.error_message,
+             pth->error_message);
+  free(pvecback);
+  free(pvecthermo);
+  free(pvecdmb_integration);
+  free(pvecdmb_derivs);
+
+  return _SUCCESS_;
+}

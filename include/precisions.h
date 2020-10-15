@@ -118,6 +118,10 @@ class_precision_parameter(thermo_Nz2_idm_dr,int,100)
  * Tolerance of the relative value of integral during thermodynamical integration
  */
 class_precision_parameter(tol_thermo_integration,double,1.0e-2)
+/**
+ * Tolerance of the relative value of integral during thermodynamical dmb temperature integration
+ */
+class_precision_parameter(tol_Tdmb_integration,double,1.0e-2) 
 /*
  * Recfast 1.4 switch parameters
  */
