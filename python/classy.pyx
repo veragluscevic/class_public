@@ -73,6 +73,16 @@ class CosmoComputationError(CosmoError):
     pass
 
 
+def rebuild(pars, computed):
+    cl = Class()
+    cl.set(pars)
+
+    if computed:
+        cl.compute()
+
+    return cl
+
+
 cdef class Class:
     """
     Class wrapping, creates the glue between C and python
@@ -135,6 +145,9 @@ cdef class Class:
         sprintf(self.fc.filename,"%s",dumc)
         self.ncp = set()
         if default: self.set_default()
+
+    def __reduce__(self):
+        return (rebuild, (self.pars, self.computed))
 
     def __dealloc__(self):
         if self.allocated:
