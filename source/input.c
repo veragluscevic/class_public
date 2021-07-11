@@ -975,6 +975,9 @@ int input_read_parameters(
       else if ((strstr(string1,"helium") != NULL)) {
         pth->dmb_target = helium;
       }
+      else if ((strstr(string1,"electron") != NULL)) {
+        pth->dmb_target = electron;
+      }
       else{
         class_stop(errmsg,"Incomprehensible input '%s' for the field 'dmb_target'",string1);
       }
